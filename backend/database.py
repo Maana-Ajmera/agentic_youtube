@@ -3,7 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker , DeclarativeBase
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
@@ -13,6 +13,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is missing from the .env file")
 
+class Base(DeclarativeBase):
+    pass
 # engine manages database connectivity and connection pooling.
 engine = create_engine(DATABASE_URL)
 
