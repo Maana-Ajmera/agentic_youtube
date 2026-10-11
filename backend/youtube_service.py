@@ -1,5 +1,6 @@
 
 import yt_dlp
+from youtube_transcript_api import YouTubeTranscriptApi
 
 
 def extract_video_metadata(url: str) -> dict:
@@ -59,4 +60,18 @@ def extract_playlist_metadata(url: str) -> dict:
         "youtube_playlist_id": info.get("id"),
         "title": info.get("title"),
         "videos": videos,
+    }
+def extract_video_transcript(video_id: str) -> dict:
+    api = YouTubeTranscriptApi()
+
+    transcript = api.fetch(video_id)
+
+    transcript_text = " ".join(
+        snippet.text for snippet in transcript.snippets
+    )
+
+    return {
+        "text": transcript_text,
+        "language": transcript.language,
+        "source": "youtube_captions",
     }

@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from database import get_db , engine , Base
 import models
 from pydantic import BaseModel, HttpUrl
-from models import Video , Playlist
+from models import Video , Playlist , Transcript
 from youtube_service import (
     extract_video_metadata,
     extract_playlist_metadata,
+    extract_video_transcript,
 )
 
 class VideoIngestRequest(BaseModel):
@@ -269,4 +270,117 @@ def get_playlist_videos(
             }
             for video in videos
         ],
+    }
+@app.post("/videos/{video_id}/transcript")
+def ingest_transcript(
+    video_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    video = db.get(Video, video_id)
+
+    if video is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found in the database.",
+        )
+
+    existing = db.scalar(
+        select(Transcript).where(
+            Transcript.video_id == video.id
+        )
+    )
+
+    if existing:
+        return {
+            "message": "Transcript already exists",
+            "transcript": {
+                "id": existing.id,
+                "video_id": existing.video_id,
+                "language": existing.language,
+                "source": existing.source,
+                "text": existing.text,
+            },
+        }
+
+    try:
+        result = extract_video_transcript(video.youtube_video_id)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Could not retrieve captions for this video. "
+                "Captions may be unavailable or YouTube may have "
+                "temporarily blocked the request."
+            ),
+        )
+
+    if not result["text"].strip():
+        raise HTTPException(
+            status_code=400,
+            detail="The retrieved transcript is empty.",
+        )
+
+    transcript = Transcript(
+        video_id=video.id,
+        text=result["text"],
+        language=result["language"],
+        source=result["source"],
+    )
+
+    db.add(transcript)
+
+    try:
+        db.commit()
+        db.refresh(transcript)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save the transcript.",
+        )
+
+    return {
+        "message": "Transcript saved successfully",
+        "transcript": {
+            "id": transcript.id,
+            "video_id": transcript.video_id,
+            "language": transcript.language,
+            "source": transcript.source,
+            "text": transcript.text,
+        },
+    }
+@app.get("/videos/{video_id}/transcript")
+def get_transcript(
+    video_id: int,
+    db: Annotated[Session, Depends(get_db)],
+):
+    video = db.get(Video, video_id)
+
+    if video is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found.",
+        )
+
+    transcript = db.scalar(
+        select(Transcript).where(
+            Transcript.video_id == video.id
+        )
+    )
+
+    if transcript is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Transcript not found. Extract it first.",
+        )
+
+    return {
+        "id": transcript.id,
+        "video_id": transcript.video_id,
+        "video_title": video.title,
+        "language": transcript.language,
+        "source": transcript.source,
+        "text": transcript.text,
+        "created_at": transcript.created_at,
+        "updated_at": transcript.updated_at,
     }
