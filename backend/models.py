@@ -74,3 +74,37 @@ class Transcript(Base):
     video: Mapped["Video"] = relationship(
         back_populates="transcript"
     )
+
+
+class GeneratedContent(Base):
+    __tablename__ = "generated_contents"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+
+    video_id: Mapped[int] = mapped_column(
+        ForeignKey("videos.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    generation_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+    )
+
+    result: Mapped[str] = mapped_column(Text, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    video: Mapped["Video"] = relationship()
